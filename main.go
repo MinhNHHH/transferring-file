@@ -3,26 +3,12 @@ package main
 import (
 	"flag"
 	"log"
-
-	"github.com/gorilla/websocket"
 )
 
 type message struct {
-	Type string `json:"type"`
-	Data string `json:"data"`
+	Type string
+	Data interface{}
 }
-
-var (
-	upgrader = websocket.Upgrader{
-		// ReadBufferSize:  1024,
-		// WriteBufferSize: 1024,
-		// CheckOrigin: func(r *http.Request) bool {
-		// 	return true
-		// },
-	}
-
-	clients = make(map[*websocket.Conn]bool)
-)
 
 func main() {
 	var server = flag.String("server", "localhost:3001", "Address to signaling server")
