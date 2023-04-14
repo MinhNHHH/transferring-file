@@ -5,13 +5,6 @@ const wsServer = new WebSocket.Server({ port: PORT });
 
 const list_room: Array<any> = [];
 
-function update_dic(a: any, b: any) {
-  for (let key in b) {
-    a[key] = b[key];
-  }
-  return a;
-}
-
 interface Room {
   roomId: string;
   connections: Array<WebSocket>;

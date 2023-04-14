@@ -19,7 +19,6 @@ type Websocket struct {
 
 func NewWebSocketConnection(url string) (*Websocket, error) {
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
-
 	if err != nil {
 		return nil, err
 	}

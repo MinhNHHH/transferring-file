@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	transferringfile "webrtc/cli/pkg/transferring-file"
 )
 
 type message struct {
@@ -11,17 +11,18 @@ type message struct {
 }
 
 func main() {
-	var server = flag.String("server", "localhost:3001", "Address to signaling server")
-	var noTurn = flag.Bool("no-turn", false, "Don't use a TURN server")
+	var server = flag.String("server", "ws://localhost:3001", "Address to signaling server")
+	var noTurn = flag.Bool("no-turn", true, "Don't use a TURN server")
 
 	flag.Parse()
 	args := flag.Args()
 
 	if len(args) == 1 {
-		log.Println(args)
+		// rc := transferringfile.RemoteClient()
+
 	} else {
-		log.Printf(*server)
-		log.Println(noTurn)
-		log.Println(args)
+		tf := transferringfile.New(*noTurn)
+		tf.Start(*server)
+		return
 	}
 }

@@ -44,7 +44,6 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 
 	// Initiate peer to peer
 	iceServers := cfg.TERMISHARE_ICE_SERVER_STUNS
-	iceServers = append(iceServers, cfg.TERMISHARE_ICE_SERVER_TURNS...)
 
 	config := webrtc.Configuration{
 		ICEServers:   iceServers,
