@@ -4,9 +4,10 @@ import (
 	"log"
 	"time"
 
-	"webrtc/cli/pkg/message"
+	// "webrtc/cli/pkg/message"
 
 	"github.com/gorilla/websocket"
+	"github.com/minhnh/transfer-file/cli/pkg/message"
 )
 
 type Websocket struct {
@@ -18,11 +19,11 @@ type Websocket struct {
 }
 
 func NewWebSocketConnection(url string) (*Websocket, error) {
+	log.Println(url)
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		return nil, err
 	}
-
 	return &Websocket{
 		Conn:   conn,
 		In:     make(chan message.Wrapper, 256),
@@ -59,6 +60,7 @@ func (ws *Websocket) Start() {
 		err := ws.ReadJSON(&msg)
 		if err == nil {
 			ws.In <- msg // Will be handled in Room
+			log.Println("zxzx", msg)
 		} else {
 			log.Printf("Failed to read message. Closing connection: %s", err)
 			ws.Stop()

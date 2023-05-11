@@ -57,6 +57,7 @@ wsServer.on("connection", (ws: WebSocket, request) => {
   room.addConnection(ws);
   ws.on("message", (message: Buffer) => {
     const msg = JSON.parse(message.toString("utf-8"));
+		console.log("zz",msg)
     // handle message
     room.boardcastException(msg, ws);
   });

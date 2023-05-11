@@ -2,11 +2,12 @@ package transferringfile
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
-	"webrtc/cli/pkg/message"
-	"webrtc/internal/cfg"
 
 	"github.com/google/uuid"
+	"github.com/minhnh/transfer-file/cli/pkg/message"
+	"github.com/minhnh/transfer-file/internal/cfg"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -32,9 +33,11 @@ func NewRemoteClient() *RemoteClient {
 	}
 }
 
+// When coonect to link, connection need to download file.
 func (rc *RemoteClient) Connect(server string, sessionID string) {
 	log.Printf("Start")
-	wsURL := "ws://localhost:8080/ws"
+	wsURL := GetWSURL(server, sessionID)
+	fmt.Printf("Connecting to: %s\n", wsURL)
 
 	wsConn, err := NewWebSocketConnection(wsURL)
 	if err != nil {
