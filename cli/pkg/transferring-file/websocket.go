@@ -1,10 +1,9 @@
 package transferringfile
 
 import (
+	"fmt"
 	"log"
 	"time"
-
-	// "webrtc/cli/pkg/message"
 
 	"github.com/gorilla/websocket"
 	"github.com/minhnh/transfer-file/cli/pkg/message"
@@ -34,6 +33,7 @@ func NewWebSocketConnection(url string) (*Websocket, error) {
 
 // blocking method that start receive and send websocket message
 func (ws *Websocket) Start() {
+
 	// Receive message coroutine
 	go func() {
 		for {
@@ -57,10 +57,10 @@ func (ws *Websocket) Start() {
 	// Send message coroutine
 	for {
 		msg := message.Wrapper{}
+		fmt.Printf("fsdfsdfsdfsdf34 %s", msg)
 		err := ws.ReadJSON(&msg)
 		if err == nil {
 			ws.In <- msg // Will be handled in Room
-			log.Println("zxzx", msg)
 		} else {
 			log.Printf("Failed to read message. Closing connection: %s", err)
 			ws.Stop()
