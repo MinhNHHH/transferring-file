@@ -28,6 +28,11 @@ type RemoteClient struct {
 
 	connected bool
 	done      chan bool
+	answer    string
+}
+type TCAuthenticatedData struct {
+	fileName string
+	fileSize int64
 }
 
 func NewRemoteClient() *RemoteClient {
@@ -76,12 +81,11 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 		}
 	})
 
-	// configChannel, err := peerConn.CreateDataChannel("config", nil)
 	dataChannel, err := peerConn.CreateDataChannel(cfg.TRANSFER_WEBRTC_DATA_CHANNEL, nil)
 	rc.dataChannel = dataChannel
 
 	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-		fmt.Println("hello 112312")
+		fmt.Println("asdasdasdasdasd")
 	})
 
 	peerConn.OnICECandidate(func(ice *webrtc.ICECandidate) {
@@ -184,8 +188,21 @@ func (rc *RemoteClient) handleWebSocketMessage(msg message.Wrapper) error {
 		rc.writeWebsocket(resp)
 
 	case message.TCNoPasscode, message.TCAuthenticated:
-		rc.connected = true
-		rc.sendOffer()
+
+		data := msg.Data.(map[string]interface{})
+		fmt.Printf("Accept '%s' (%0.1f MB)? (y/n) ", data["fileName"], data["fileSize"])
+		answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		answer = strings.TrimSpace(answer)
+
+		err := rc.SetAnswer(answer)
+		if err != nil {
+			return err
+		}
+		resp := message.Wrapper{
+			Type: message.TCSend,
+			To:   cfg.TRANSFER_WEBSOCKET_HOST_ID,
+		}
+		rc.writeWebsocket(resp)
 
 	case message.TRTCOffer:
 		return fmt.Errorf("Remote client shouldn't receive Offer message")
@@ -240,4 +257,15 @@ func (rc *RemoteClient) sendOffer() {
 	}
 
 	rc.writeWebsocket(payload)
+}
+
+func (rc *RemoteClient) SetAnswer(answer string) error {
+	if answer == "y" {
+		rc.answer = answer
+		rc.connected = true
+		rc.sendOffer()
+		return nil
+	} else {
+		return fmt.Errorf("Answer should be y")
+	}
 }

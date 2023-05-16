@@ -1,7 +1,6 @@
 package transferringfile
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -57,7 +56,6 @@ func (ws *Websocket) Start() {
 	// Send message coroutine
 	for {
 		msg := message.Wrapper{}
-		fmt.Printf("fsdfsdfsdfsdf34 %s", msg)
 		err := ws.ReadJSON(&msg)
 		if err == nil {
 			ws.In <- msg // Will be handled in Room

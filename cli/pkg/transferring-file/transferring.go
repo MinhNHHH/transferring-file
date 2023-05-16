@@ -34,6 +34,8 @@ type Transfer struct {
 	clients  map[string]*Client
 	noTurn   bool
 	passcode string
+
+	file *os.File
 }
 
 func New(noTurn bool) *Transfer {
@@ -109,12 +111,13 @@ func (tf *Transfer) Start(server string, filePath string) error {
 	if !tf.isRequirePasscode() {
 		requirePasscodeMsg.Type = "NoPasscode"
 	}
-	requirePasscodeMsg.Data = filePath
 	// Read file
-	// file, err := os.Open(filePath)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	file, err := os.Open(filePath)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
 	// buffer := make([]byte, 2048)
 	// for {
 	// 	n, err := file.Read(buffer)
@@ -125,8 +128,7 @@ func (tf *Transfer) Start(server string, filePath string) error {
 	// 		break
 	// 	}
 	// }
-	// requirePasscodeMsg.Data = buffer
-	// defer file.Close()
+	tf.file = file
 
 	// // use io.Copy to simultaneously upload and download
 	// _, err = io.Copy(tf, file)
@@ -285,10 +287,28 @@ func (tf *Transfer) handleWebSocketMessage(msg message.Wrapper) error {
 		if tf.isAuthenticated(passcode) {
 			client.authenticated = true
 			resp.Type = message.TCAuthenticated
+			fileInfo, _ := tf.file.Stat()
+			resp.Data = map[string]interface{}{
+				"fileName": fileInfo.Name(),
+				"fileSize": fileInfo.Size(),
+			}
 		} else {
 			resp.Type = message.TCUnauthenticated
 		}
 		tf.writeWebsocket(resp)
+
+	case message.TCSend:
+		tf.lock.RLock()
+		defer tf.lock.RUnlock()
+
+		for ID, client := range tf.clients {
+			if client.transferChannel != nil {
+				err := client.transferChannel.Send([]byte("Hello"))
+				if err != nil {
+					log.Printf("Failed to send config to client: %s", ID)
+				}
+			}
+		}
 
 	default:
 		return fmt.Errorf("Not implemented to handle message type: %s", msg.Type)
@@ -389,9 +409,9 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 			switch label := d.Label(); label {
 
 			case cfg.TRANSFER_WEBRTC_DATA_CHANNEL:
+				fmt.Printf("xcxcxcxc232")
 				d.OnMessage(func(msg webrtc.DataChannelMessage) {
 					// ts.pty.Write(msg.Data)
-					fmt.Print("xxxxmmmmmm")
 				})
 				tf.clients[ID].transferChannel = d
 			default:
