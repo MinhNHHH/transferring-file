@@ -17,11 +17,12 @@ type Websocket struct {
 }
 
 func NewWebSocketConnection(url string) (*Websocket, error) {
-	log.Println(url)
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &Websocket{
 		Conn:   conn,
 		In:     make(chan message.Wrapper, 256),
@@ -32,7 +33,6 @@ func NewWebSocketConnection(url string) (*Websocket, error) {
 
 // blocking method that start receive and send websocket message
 func (ws *Websocket) Start() {
-
 	// Receive message coroutine
 	go func() {
 		for {

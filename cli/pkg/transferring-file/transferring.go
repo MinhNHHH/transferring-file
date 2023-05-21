@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -118,24 +119,7 @@ func (tf *Transfer) Start(server string, filePath string) error {
 	}
 	defer file.Close()
 
-	// buffer := make([]byte, 2048)
-	// for {
-	// 	n, err := file.Read(buffer)
-	// 	if err != nil && err != io.EOF {
-	// 		panic(err)
-	// 	}
-	// 	if n == 0 {
-	// 		break
-	// 	}
-	// }
 	tf.file = file
-
-	// // use io.Copy to simultaneously upload and download
-	// _, err = io.Copy(tf, file)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
 	tf.writeWebsocket(requirePasscodeMsg)
 
 	go tf.startHandleWsMessages()
@@ -216,13 +200,19 @@ func (tf *Transfer) handleWebSocketMessage(msg message.Wrapper) error {
 		if tf.isRequirePasscode() {
 			msg.Type = message.TCRequirePasscode
 		} else {
+			fileInfo, _ := tf.file.Stat()
 			msg.Type = message.TCNoPasscode
+			msg.Data = map[string]interface{}{
+				"fileName": fileInfo.Name(),
+				"fileSize": fileInfo.Size(),
+			}
 		}
 
 		tf.writeWebsocket(msg)
 		return nil
 	}
 	client, ok := tf.clients[msg.From]
+
 	if !ok {
 		return fmt.Errorf("Client with ID: %s not found", msg.From)
 	}
@@ -254,7 +244,6 @@ func (tf *Transfer) handleWebSocketMessage(msg message.Wrapper) error {
 		if err := client.conn.SetLocalDescription(answer); err != nil {
 			return fmt.Errorf("Failed to set local description: %s", err)
 		}
-
 		answerByte, _ := json.Marshal(answer)
 		payload := message.Wrapper{
 			Type: message.TRTCAnswer,
@@ -264,11 +253,9 @@ func (tf *Transfer) handleWebSocketMessage(msg message.Wrapper) error {
 		tf.writeWebsocket(payload)
 
 	case message.TRTCCandidate:
-
 		if tf.isRequirePasscode() && !client.authenticated {
 			return fmt.Errorf("Unauthenticated client")
 		}
-
 		candidate := webrtc.ICECandidateInit{}
 		if err := json.Unmarshal([]byte(msg.Data.(string)), &candidate); err != nil {
 			return fmt.Errorf("Failed to unmarshall icecandidate: %s", err)
@@ -280,35 +267,22 @@ func (tf *Transfer) handleWebSocketMessage(msg message.Wrapper) error {
 
 	case message.TCPasscode:
 		passcode := msg.Data.(string)
+		fileInfo, _ := tf.file.Stat()
 		resp := message.Wrapper{
 			To: msg.From,
+			Data: map[string]interface{}{
+				"fileName": fileInfo.Name(),
+				"fileSize": fileInfo.Size(),
+			},
 		}
 
 		if tf.isAuthenticated(passcode) {
 			client.authenticated = true
 			resp.Type = message.TCAuthenticated
-			fileInfo, _ := tf.file.Stat()
-			resp.Data = map[string]interface{}{
-				"fileName": fileInfo.Name(),
-				"fileSize": fileInfo.Size(),
-			}
 		} else {
 			resp.Type = message.TCUnauthenticated
 		}
 		tf.writeWebsocket(resp)
-
-	case message.TCSend:
-		tf.lock.RLock()
-		defer tf.lock.RUnlock()
-
-		for ID, client := range tf.clients {
-			if client.transferChannel != nil {
-				err := client.transferChannel.Send([]byte("Hello"))
-				if err != nil {
-					log.Printf("Failed to send config to client: %s", ID)
-				}
-			}
-		}
 
 	default:
 		return fmt.Errorf("Not implemented to handle message type: %s", msg.Type)
@@ -329,25 +303,6 @@ func (tf *Transfer) SetPasscode(passcode string) error {
 		return fmt.Errorf("Passcode must be more than 6 characters")
 	}
 }
-
-// // Write method to forward terminal changes over webrtc
-// func (tf *Transfer) Write(data []byte) (int, error) {
-// 	tf.lock.RLock()
-// 	defer tf.lock.RUnlock()
-
-// 	for ID, client := range tf.clients {
-// 		//go func(ID string, client *Client) {
-// 		if client.transferChannel != nil {
-// 			err := client.transferChannel.Send(data)
-// 			if err != nil {
-// 				log.Printf("Failed to send config to client: %s", ID)
-// 			}
-// 		}
-// 		//}(ID, client)
-// 	}
-
-// 	return len(data), nil
-// }
 
 func (tf *Transfer) removeClient(ID string) {
 	if client, ok := tf.clients[ID]; ok {
@@ -392,10 +347,11 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 	}
 	client.conn = peerConn
 
+	// Create channel that is blocked until ICE Gathering is complete
 	peerConn.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
 		log.Printf("Peer connection state has changed: %s", s.String())
 		switch s {
-		//case webrtc.PeerConnectionStateConnected:
+		// case webrtc.PeerConnectionStateConnected:
 		case webrtc.PeerConnectionStateClosed, webrtc.PeerConnectionStateDisconnected:
 			log.Printf("Removing client: %s", ID)
 			tf.removeClient(ID)
@@ -409,9 +365,19 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 			switch label := d.Label(); label {
 
 			case cfg.TRANSFER_WEBRTC_DATA_CHANNEL:
-				fmt.Printf("xcxcxcxc232")
+				//Send file after established peer to peer
+				buffer := make([]byte, 2048)
+				for {
+					n, err := tf.file.Read(buffer)
+					if err != nil && err != io.EOF {
+						panic(err)
+					}
+					if n == 0 {
+						break
+					}
+					d.Send(buffer[:n])
+				}
 				d.OnMessage(func(msg webrtc.DataChannelMessage) {
-					// ts.pty.Write(msg.Data)
 				})
 				tf.clients[ID].transferChannel = d
 			default:
@@ -439,7 +405,6 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 
 		tf.writeWebsocket(msg)
 	})
-
 	return client, nil
 }
 

@@ -22,13 +22,13 @@ type RemoteClient struct {
 	// use Client struct
 	// for transferring terminal changes
 	dataChannel *webrtc.DataChannel
-	// configChannel *webrtc.DataChannel
-	peerConn *webrtc.PeerConnection
-	wsConn   *Websocket
+	peerConn    *webrtc.PeerConnection
+	wsConn      *Websocket
 
 	connected bool
 	done      chan bool
 	answer    string
+	file      []byte
 }
 type TCAuthenticatedData struct {
 	fileName string
@@ -85,10 +85,20 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 	rc.dataChannel = dataChannel
 
 	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-		fmt.Println("asdasdasdasdasd")
+		downloadFile, err := os.Create("file-to-download.txt")
+		if err != nil {
+			log.Printf("Error create new file", err)
+		}
+		defer downloadFile.Close()
+		_, err = downloadFile.Write(msg.Data)
+		if err != nil {
+			log.Printf("Error download file", err)
+		}
+		fmt.Printf("Download Succes")
 	})
 
 	peerConn.OnICECandidate(func(ice *webrtc.ICECandidate) {
+
 		if ice == nil {
 			return
 		}
@@ -98,7 +108,6 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 			log.Printf("Failed to decode ice candidate: %s", err)
 			return
 		}
-
 		msg := message.Wrapper{
 			Type: message.TRTCCandidate,
 			Data: string(candidate),
@@ -113,10 +122,6 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 		Data: cfg.SUPPORTED_VERSION})
 
 	for {
-		if rc.connected {
-			break
-		}
-
 		msg, ok := <-rc.wsConn.In
 		if !ok {
 			log.Printf("Failed to read websocket message")
@@ -134,8 +139,8 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 			break
 		}
 	}
-
-	select {}
+	<-rc.done
+	return
 }
 
 func (rc *RemoteClient) writeWebsocket(msg message.Wrapper) error {
@@ -194,15 +199,11 @@ func (rc *RemoteClient) handleWebSocketMessage(msg message.Wrapper) error {
 		answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		answer = strings.TrimSpace(answer)
 
+		rc.answer = answer
 		err := rc.SetAnswer(answer)
 		if err != nil {
 			return err
 		}
-		resp := message.Wrapper{
-			Type: message.TCSend,
-			To:   cfg.TRANSFER_WEBSOCKET_HOST_ID,
-		}
-		rc.writeWebsocket(resp)
 
 	case message.TRTCOffer:
 		return fmt.Errorf("Remote client shouldn't receive Offer message")
@@ -212,7 +213,6 @@ func (rc *RemoteClient) handleWebSocketMessage(msg message.Wrapper) error {
 		if err := json.Unmarshal([]byte(msg.Data.(string)), &answer); err != nil {
 			return err
 		}
-
 		rc.peerConn.SetRemoteDescription(answer)
 
 	case message.TRTCCandidate:
@@ -249,13 +249,11 @@ func (rc *RemoteClient) sendOffer() {
 		log.Printf("Failed to set local description: %s", err)
 		rc.Stop("Failed to connect to termishare session")
 	}
-
 	offerByte, _ := json.Marshal(offer)
 	payload := message.Wrapper{
 		Type: message.TRTCOffer,
 		Data: string(offerByte),
 	}
-
 	rc.writeWebsocket(payload)
 }
 

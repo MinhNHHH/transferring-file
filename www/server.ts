@@ -1,6 +1,6 @@
 import { WebSocket } from "ws";
 
-const PORT : any = 3001
+const PORT: any = 3001;
 const wsServer = new WebSocket.Server({ port: PORT });
 
 const list_room: Array<any> = [];
@@ -27,14 +27,10 @@ class Room {
     }
   }
 
-  boardcastException(msg: message, connection: WebSocket) {
+  boardcastException(msg: any, connection: WebSocket) {
     this.connections.forEach(function (client) {
       if (client !== connection && client.readyState === WebSocket.OPEN) {
-        client.send(
-          JSON.stringify({
-            ...msg
-          })
-        );
+        client.send(JSON.stringify(msg));
       }
     });
   }
@@ -57,7 +53,7 @@ wsServer.on("connection", (ws: WebSocket, request) => {
   room.addConnection(ws);
   ws.on("message", (message: Buffer) => {
     const msg = JSON.parse(message.toString("utf-8"));
-		console.log("zz",msg)
+    console.log("zz", msg);
     // handle message
     room.boardcastException(msg, ws);
   });
