@@ -6,13 +6,9 @@ import (
 	"os"
 	"regexp"
 
+	message "github.com/minhnh/transfer-file/cli/pkg/message"
 	transferringfile "github.com/minhnh/transfer-file/cli/pkg/transferring-file"
 )
-
-type message struct {
-	Type string
-	Data interface{}
-}
 
 func main() {
 	var server = flag.String("server", "http://localhost:3001", "Address to signaling server")
@@ -40,10 +36,9 @@ func main() {
 			fmt.Printf("This terminal is already being shared at: %s\n", transferringfile.GetClientURL(*server, sessionID))
 			return
 		}
-		if args[0] == "send" {
+		if args[0] == message.TCSend {
 			filePath = args[1]
 		}
-
 		// TODO: Host need to register a file to server.
 		tf := transferringfile.New(*noTurn)
 		tf.Start(*server, filePath)

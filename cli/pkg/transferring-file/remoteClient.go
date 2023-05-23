@@ -85,16 +85,34 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 	rc.dataChannel = dataChannel
 
 	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-		downloadFile, err := os.Create("file-to-download.txt")
+		var fileInfoBytes FileInformation
+		err := json.Unmarshal(msg.Data, &fileInfoBytes)
+		if err != nil {
+			fmt.Println("Error unmarshaling file information:", err)
+			return
+		}
+
+		downloadFile, err := os.Create(fileInfoBytes.Name)
 		if err != nil {
 			log.Printf("Error create new file", err)
 		}
 		defer downloadFile.Close()
-		_, err = downloadFile.Write(msg.Data)
-		if err != nil {
-			log.Printf("Error download file", err)
+
+		bytesWritten := 0
+		totalBytes := len(fileInfoBytes.Content)
+
+		for _, b := range fileInfoBytes.Content {
+			n, err := downloadFile.Write([]byte{b})
+			if err != nil {
+				log.Printf("Error writing to file: %v", err)
+				return
+			}
+			bytesWritten += n
+
+			progress := float64(bytesWritten) / float64(totalBytes) * 100
+			fmt.Printf("Download Progress: %.2f%%\n", progress)
 		}
-		fmt.Printf("Download Succes")
+		fmt.Fprintf(os.Stderr, "\rFile %s (%s) download completed.\n", fileInfoBytes.Name, ByteCountDecimal(fileInfoBytes.Size))
 	})
 
 	peerConn.OnICECandidate(func(ice *webrtc.ICECandidate) {
@@ -193,9 +211,8 @@ func (rc *RemoteClient) handleWebSocketMessage(msg message.Wrapper) error {
 		rc.writeWebsocket(resp)
 
 	case message.TCNoPasscode, message.TCAuthenticated:
-
 		data := msg.Data.(map[string]interface{})
-		fmt.Printf("Accept '%s' (%0.1f MB)? (y/n) ", data["fileName"], data["fileSize"])
+		fmt.Printf("Accept '%s' (%s)? (y/n) ", data["fileName"], ByteCountDecimal(int64(data["fileSize"].(float64))))
 		answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		answer = strings.TrimSpace(answer)
 
@@ -258,7 +275,7 @@ func (rc *RemoteClient) sendOffer() {
 }
 
 func (rc *RemoteClient) SetAnswer(answer string) error {
-	if answer == "y" {
+	if answer == message.TCYes {
 		rc.answer = answer
 		rc.connected = true
 		rc.sendOffer()

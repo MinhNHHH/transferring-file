@@ -29,8 +29,9 @@ const (
 	TCConnect         = "Connect"
 	TCRequirePasscode = "RequirePasscode"
 	TCNoPasscode      = "NoPasscode"
-	TCSend            = "Send"
-	TCReceive         = "Receive"
+	TCSend            = "send"
+	TCYes             = "y"
+	TCNo              = "No"
 	// message to wrap passcode
 	TCPasscode = "Passcode"
 	// connection's response

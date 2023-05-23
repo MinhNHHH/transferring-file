@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -37,6 +37,12 @@ type Transfer struct {
 	passcode string
 
 	file *os.File
+}
+
+type FileInformation struct {
+	Name    string
+	Size    int64
+	Content []byte
 }
 
 func New(noTurn bool) *Transfer {
@@ -366,17 +372,23 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 
 			case cfg.TRANSFER_WEBRTC_DATA_CHANNEL:
 				//Send file after established peer to peer
-				buffer := make([]byte, 2048)
-				for {
-					n, err := tf.file.Read(buffer)
-					if err != nil && err != io.EOF {
-						panic(err)
-					}
-					if n == 0 {
-						break
-					}
-					d.Send(buffer[:n])
+				buffer, err := ioutil.ReadAll(tf.file)
+				if err != nil {
+					fmt.Println("Error reading file:", err)
+					return
 				}
+				fileInfo, _ := tf.file.Stat()
+
+				dataByte, error := json.Marshal(FileInformation{
+					Name:    fileInfo.Name(),
+					Size:    fileInfo.Size(),
+					Content: buffer,
+				})
+				if error != nil {
+					fmt.Println("Error marshaling file information:", err)
+					return
+				}
+				d.Send(dataByte)
 				d.OnMessage(func(msg webrtc.DataChannelMessage) {
 				})
 				tf.clients[ID].transferChannel = d
