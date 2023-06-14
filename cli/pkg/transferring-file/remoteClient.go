@@ -11,9 +11,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/k0kubun/go-ansi"
 	"github.com/minhnh/transfer-file/cli/pkg/message"
 	"github.com/minhnh/transfer-file/internal/cfg"
 	"github.com/pion/webrtc/v3"
+	"github.com/schollz/progressbar/v3"
+	// "github.com/schollz/progressbar/v3"
 )
 
 type RemoteClient struct {
@@ -29,6 +32,9 @@ type RemoteClient struct {
 	done      chan bool
 	answer    string
 	file      []byte
+
+	bar    *progressbar.ProgressBar
+	doneCh chan struct{}
 }
 type TCAuthenticatedData struct {
 	fileName string
@@ -85,34 +91,80 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 	rc.dataChannel = dataChannel
 
 	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-		var fileInfoBytes FileInformation
-		err := json.Unmarshal(msg.Data, &fileInfoBytes)
+		// var fileInfoBytes MesageChannel
+		webrtcMessage := MesageChannel{}
+		err := json.Unmarshal(msg.Data, &webrtcMessage)
 		if err != nil {
 			fmt.Println("Error unmarshaling file information:", err)
 			return
 		}
+		switch webrtcMessage.Type {
+		case "Send":
+			rc.bar = progressbar.NewOptions(int(webrtcMessage.Data.Size),
+				progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
+				progressbar.OptionEnableColorCodes(true),
+				progressbar.OptionShowBytes(true),
+				progressbar.OptionSetWidth(15),
+				progressbar.OptionSetDescription("Writing moshable file..."),
+				progressbar.OptionSetTheme(progressbar.Theme{
+					Saucer:        "[green]=[reset]",
+					SaucerHead:    "[green]>[reset]",
+					SaucerPadding: " ",
+					BarStart:      "[",
+					BarEnd:        "]",
+				}),
+				progressbar.OptionOnCompletion(func() {
+					rc.doneCh <- struct{}{}
+				}))
+			fileInfoJSON, _ := json.Marshal(MesageChannel{
+				Type: "Received",
+			})
+			dataChannel.Send(fileInfoJSON)
+		case "Content":
+			rc.file = append(rc.file, webrtcMessage.Data.Content...)
+			if float64(len(rc.file)/int(webrtcMessage.Data.Size)) >= 0.99 {
+				downloadFile, err := os.Create(webrtcMessage.Data.Name)
+				if err != nil {
+					log.Printf("Error create new file", err)
+				}
+				defer downloadFile.Close()
 
-		downloadFile, err := os.Create(fileInfoBytes.Name)
-		if err != nil {
-			log.Printf("Error create new file", err)
-		}
-		defer downloadFile.Close()
-
-		bytesWritten := 0
-		totalBytes := len(fileInfoBytes.Content)
-
-		for _, b := range fileInfoBytes.Content {
-			n, err := downloadFile.Write([]byte{b})
-			if err != nil {
-				log.Printf("Error writing to file: %v", err)
-				return
+				_, err = downloadFile.Write(rc.file)
+				if err != nil {
+					log.Printf("Error writing to file: %v", err)
+				}
 			}
-			bytesWritten += n
+			rc.bar.Add(len(webrtcMessage.Data.Content))
 
-			progress := float64(bytesWritten) / float64(totalBytes) * 100
-			fmt.Printf("Download Progress: %.2f%%\n", progress)
+		default:
+			log.Printf("Unhandled msg config type: %s", webrtcMessage.Type)
 		}
-		fmt.Fprintf(os.Stderr, "\rFile %s (%s) download completed.\n", fileInfoBytes.Name, ByteCountDecimal(fileInfoBytes.Size))
+		// rc.file = append(rc.file, fileInfoBytes.Content...)
+		// if len(rc.file)/int(fileInfoBytes.Size) >= 1 && float64(len(rc.file)/int(fileInfoBytes.Size)) <= 1.2 {
+		// downloadFile, err := os.Create(fileInfoBytes.Name)
+		// if err != nil {
+		// 	log.Printf("Error create new file", err)
+		// }
+		// defer downloadFile.Close()
+		// fmt.Printf("zzz12312312321")
+
+		// }
+
+		// bytesWritten := 0
+		// totalBytes := len(fileInfoBytes.Content)
+
+		// for _, b := range fileInfoBytes.Content {
+		// 	n, err := downloadFile.Write([]byte{b})
+		// 	if err != nil {
+		// 		log.Printf("Error writing to file: %v", err)
+		// 		return
+		// 	}
+		// 	bytesWritten += n
+
+		// 	progress := float64(bytesWritten) / float64(totalBytes) * 100
+		// 	fmt.Printf("Download Progress: %.2f%%\n", progress)
+		// }
+		// fmt.Fprintf(os.Stderr, "\rFile %s (%s) download completed.\n", fileInfoBytes.Name, ByteCountDecimal(fileInfoBytes.Size))
 	})
 
 	peerConn.OnICECandidate(func(ice *webrtc.ICECandidate) {

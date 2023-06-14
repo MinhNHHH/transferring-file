@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -43,6 +43,11 @@ type FileInformation struct {
 	Name    string
 	Size    int64
 	Content []byte
+}
+
+type MesageChannel struct {
+	Type string
+	Data FileInformation
 }
 
 func New(noTurn bool) *Transfer {
@@ -372,24 +377,58 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 
 			case cfg.TRANSFER_WEBRTC_DATA_CHANNEL:
 				//Send file after established peer to peer
-				buffer, err := ioutil.ReadAll(tf.file)
+				fileInfo, err := tf.file.Stat()
 				if err != nil {
-					fmt.Println("Error reading file:", err)
-					return
+					fmt.Printf("Failed to get file information: %w", err)
+					break
 				}
-				fileInfo, _ := tf.file.Stat()
-
-				dataByte, error := json.Marshal(FileInformation{
-					Name:    fileInfo.Name(),
-					Size:    fileInfo.Size(),
-					Content: buffer,
+				fileInfoJSON, _ := json.Marshal(MesageChannel{
+					Type: "Send",
+					Data: FileInformation{
+						Name: fileInfo.Name(),
+						Size: fileInfo.Size(),
+					},
 				})
-				if error != nil {
-					fmt.Println("Error marshaling file information:", err)
-					return
-				}
-				d.Send(dataByte)
+				d.Send(fileInfoJSON)
+
 				d.OnMessage(func(msg webrtc.DataChannelMessage) {
+					webrtcMessage := MesageChannel{}
+					err := json.Unmarshal(msg.Data, &webrtcMessage)
+					if err != nil {
+						fmt.Println("Error unmarshaling file information:", err)
+						return
+					}
+					switch webrtcMessage.Type {
+					case "Received":
+						buffer := make([]byte, 4096)
+						for {
+							bytesRead, err := tf.file.Read(buffer)
+							if err != nil && err != io.EOF {
+								fmt.Printf("Failed to read file %w", err)
+								break
+							}
+							if bytesRead > 0 {
+								dataByte, errs := json.Marshal(MesageChannel{
+									Type: "Content",
+									Data: FileInformation{
+										Name:    fileInfo.Name(),
+										Size:    fileInfo.Size(),
+										Content: buffer[:bytesRead],
+									},
+								})
+								if errs != nil {
+									fmt.Printf("failed to marshal file information: %w", errs)
+									break
+								}
+								err = d.Send(dataByte)
+								if err != nil {
+									fmt.Printf("failed to send file data: %w", err)
+									break
+								}
+
+							}
+						}
+					}
 				})
 				tf.clients[ID].transferChannel = d
 			default:
