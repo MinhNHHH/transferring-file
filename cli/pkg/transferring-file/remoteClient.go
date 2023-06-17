@@ -16,14 +16,13 @@ import (
 	"github.com/minhnh/transfer-file/internal/cfg"
 	"github.com/pion/webrtc/v3"
 	"github.com/schollz/progressbar/v3"
-	// "github.com/schollz/progressbar/v3"
 )
 
 type RemoteClient struct {
 	clientID string
 
 	// use Client struct
-	// for transferring terminal changes
+	// for transfer changes
 	dataChannel *webrtc.DataChannel
 	peerConn    *webrtc.PeerConnection
 	wsConn      *Websocket
@@ -33,6 +32,7 @@ type RemoteClient struct {
 	answer    string
 	file      []byte
 
+	// for progressbar
 	bar    *progressbar.ProgressBar
 	doneCh chan struct{}
 }
@@ -100,22 +100,7 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 		}
 		switch webrtcMessage.Type {
 		case "Send":
-			rc.bar = progressbar.NewOptions(int(webrtcMessage.Data.Size),
-				progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
-				progressbar.OptionEnableColorCodes(true),
-				progressbar.OptionShowBytes(true),
-				progressbar.OptionSetWidth(15),
-				progressbar.OptionSetDescription("Writing moshable file..."),
-				progressbar.OptionSetTheme(progressbar.Theme{
-					Saucer:        "[green]=[reset]",
-					SaucerHead:    "[green]>[reset]",
-					SaucerPadding: " ",
-					BarStart:      "[",
-					BarEnd:        "]",
-				}),
-				progressbar.OptionOnCompletion(func() {
-					rc.doneCh <- struct{}{}
-				}))
+			rc.InitiateBar(int(webrtcMessage.Data.Size))
 			fileInfoJSON, _ := json.Marshal(MesageChannel{
 				Type: "Received",
 			})
@@ -133,38 +118,13 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 				if err != nil {
 					log.Printf("Error writing to file: %v", err)
 				}
+				rc.Stop("Download sucess")
 			}
 			rc.bar.Add(len(webrtcMessage.Data.Content))
 
 		default:
 			log.Printf("Unhandled msg config type: %s", webrtcMessage.Type)
 		}
-		// rc.file = append(rc.file, fileInfoBytes.Content...)
-		// if len(rc.file)/int(fileInfoBytes.Size) >= 1 && float64(len(rc.file)/int(fileInfoBytes.Size)) <= 1.2 {
-		// downloadFile, err := os.Create(fileInfoBytes.Name)
-		// if err != nil {
-		// 	log.Printf("Error create new file", err)
-		// }
-		// defer downloadFile.Close()
-		// fmt.Printf("zzz12312312321")
-
-		// }
-
-		// bytesWritten := 0
-		// totalBytes := len(fileInfoBytes.Content)
-
-		// for _, b := range fileInfoBytes.Content {
-		// 	n, err := downloadFile.Write([]byte{b})
-		// 	if err != nil {
-		// 		log.Printf("Error writing to file: %v", err)
-		// 		return
-		// 	}
-		// 	bytesWritten += n
-
-		// 	progress := float64(bytesWritten) / float64(totalBytes) * 100
-		// 	fmt.Printf("Download Progress: %.2f%%\n", progress)
-		// }
-		// fmt.Fprintf(os.Stderr, "\rFile %s (%s) download completed.\n", fileInfoBytes.Name, ByteCountDecimal(fileInfoBytes.Size))
 	})
 
 	peerConn.OnICECandidate(func(ice *webrtc.ICECandidate) {
@@ -172,7 +132,6 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 		if ice == nil {
 			return
 		}
-
 		candidate, err := json.Marshal(ice.ToJSON())
 		if err != nil {
 			log.Printf("Failed to decode ice candidate: %s", err)
@@ -182,7 +141,6 @@ func (rc *RemoteClient) Connect(server string, sessionID string) {
 			Type: message.TRTCCandidate,
 			Data: string(candidate),
 		}
-
 		rc.writeWebsocket(msg)
 	})
 
@@ -335,4 +293,23 @@ func (rc *RemoteClient) SetAnswer(answer string) error {
 	} else {
 		return fmt.Errorf("Answer should be y")
 	}
+}
+
+func (rc *RemoteClient) InitiateBar(sizeFile int) {
+	rc.bar = progressbar.NewOptions(sizeFile,
+		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetWidth(15),
+		progressbar.OptionSetDescription("Writing moshable file..."),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+		progressbar.OptionOnCompletion(func() {
+			rc.doneCh <- struct{}{}
+		}))
 }

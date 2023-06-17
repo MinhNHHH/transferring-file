@@ -15,9 +15,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/k0kubun/go-ansi"
 	"github.com/minhnh/transfer-file/cli/pkg/message"
 	"github.com/minhnh/transfer-file/internal/cfg"
 	"github.com/pion/webrtc/v3"
+	"github.com/schollz/progressbar/v3"
 )
 
 type Client struct {
@@ -37,6 +39,10 @@ type Transfer struct {
 	passcode string
 
 	file *os.File
+
+	// for progressbar
+	bar    *progressbar.ProgressBar
+	doneCh chan struct{}
 }
 
 type FileInformation struct {
@@ -379,9 +385,12 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 				//Send file after established peer to peer
 				fileInfo, err := tf.file.Stat()
 				if err != nil {
-					fmt.Printf("Failed to get file information: %w", err)
+					log.Printf("Failed to get file information: %w", err)
 					break
 				}
+
+				tf.TfinitiateBar(int(fileInfo.Size()))
+				// Send file information to client.
 				fileInfoJSON, _ := json.Marshal(MesageChannel{
 					Type: "Send",
 					Data: FileInformation{
@@ -389,22 +398,25 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 						Size: fileInfo.Size(),
 					},
 				})
-				d.Send(fileInfoJSON)
 
+				d.Send(fileInfoJSON)
+				// fmt.Println("Sending '%s' (%s)", fileInfo.Name(), ByteCountDecimal(int64(fileInfo.Size())))
 				d.OnMessage(func(msg webrtc.DataChannelMessage) {
 					webrtcMessage := MesageChannel{}
 					err := json.Unmarshal(msg.Data, &webrtcMessage)
 					if err != nil {
-						fmt.Println("Error unmarshaling file information:", err)
+						log.Printf("Error unmarshaling file information:", err)
 						return
 					}
 					switch webrtcMessage.Type {
 					case "Received":
+						// We can't reading the entire file into memory. Therefore, loop to read a portion of the file, send it,
+						// and continue until the entire file is transmitted.
 						buffer := make([]byte, 4096)
 						for {
 							bytesRead, err := tf.file.Read(buffer)
 							if err != nil && err != io.EOF {
-								fmt.Printf("Failed to read file %w", err)
+								log.Printf("Failed to read file %w", err)
 								break
 							}
 							if bytesRead > 0 {
@@ -417,12 +429,13 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 									},
 								})
 								if errs != nil {
-									fmt.Printf("failed to marshal file information: %w", errs)
+									log.Printf("failed to marshal file information: %w", errs)
 									break
 								}
 								err = d.Send(dataByte)
+								tf.bar.Add(bytesRead)
 								if err != nil {
-									fmt.Printf("failed to send file data: %w", err)
+									log.Printf("failed to send file data: %w", err)
 									break
 								}
 
@@ -461,4 +474,23 @@ func (tf *Transfer) newClient(ID string) (*Client, error) {
 
 func (tf *Transfer) isAuthenticated(passcode string) bool {
 	return passcode == tf.passcode
+}
+
+func (tf *Transfer) TfinitiateBar(sizeFile int) {
+	tf.bar = progressbar.NewOptions(sizeFile,
+		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetWidth(15),
+		progressbar.OptionSetDescription("Writing moshable file..."),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+		progressbar.OptionOnCompletion(func() {
+			tf.doneCh <- struct{}{}
+		}))
 }
