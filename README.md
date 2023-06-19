@@ -17,7 +17,7 @@ In order to achieve that, transfer uses a combination of WebSocket and WebRTC:
 ### Git clone
 1. Go to https://github.com/MinhNHHH/transferring-file clone project
 2. On terminal run command `go build cmd/transferring-file/transfer.go`
-3. Move it to `/usr/local/bin` folder so that you could use `transfer` anywhere : `mv termishare /usr/local/bin`
+3. Move it to `/usr/local/bin` folder so that you could use `transfer` anywhere : `mv transfer /usr/local/bin`
 
 ## Usage
 1. To start a sharing session, just run `transfer send {{file_name}}`.
