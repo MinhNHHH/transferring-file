@@ -1,5 +1,9 @@
 # transferring file
 
+<p align="center">
+  <img src="./demo.gif" alt="animated" width="800" height="400"/>
+</p>
+
 `transfer` is a tool that allows any two computers to simply and securely transfer file. `transfer` is the only CLI file-transfer tool that does all of the following:
 
 - allows **any two computers** to transfer data (using a peer to peer)
@@ -20,9 +24,11 @@ In order to achieve that, transfer uses a combination of WebSocket and WebRTC:
 3. Move it to `/usr/local/bin` folder so that you could use `transfer` anywhere : `mv transfer /usr/local/bin`
 
 ## Usage
-1. To start a sharing session, just run `transfer send {{file_name}}`.
-2. Transfer-file will echo out a connection url you can use to connect via:
-    - Receive file with command :`transfer {{connection_url}}`
+
+1. Go to `www` and run command `npm run start`
+2. To start a new session, just run `transfer send {{file_name}}`.
+3. Transfer-file will echo out a connection url you can use to connect via:
+  - Receive file with command: `transfer {{connection_url}}`
 
 ### Note
 There are chances where a direct peer-to-peer connection can't be established, so I included a TURN server that I created using [CoTURN](https://github.com/coturn/coturn).
