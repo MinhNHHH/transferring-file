@@ -18,13 +18,12 @@ In order to achieve that, transfer uses a combination of WebSocket and WebRTC:
 # Getting started
 
 ## Install
-### Git clone
-1. Go to https://github.com/MinhNHHH/transferring-file clone project
-2. On terminal run command `go build cmd/transferring-file/transfer.go`
-3. Move it to `/usr/local/bin` folder so that you could use `transfer` anywhere : `mv transfer /usr/local/bin`
+1. Go to our [release](https://github.com/MinhNHHH/transferring-file/releases/tag/v1.0.0) page and get a pre-built binary of `transfer`. Make sure you get the one that match your OS.
+2. Unzip the package `unzip cil-tool.zip`
+3. (Optional) Move it to `/usr/local/bin` folder so that you could use `transfer` anywhere : `mv transfer /usr/local/bin`
+4. Done.
 
-## Usage
-
+## Usage 
 1. Go to `www` and run command `npm run start`
 2. To start a new session, just run `transfer send {{file_name}}`.
 3. Transfer-file will echo out a connection url you can use to connect via:
